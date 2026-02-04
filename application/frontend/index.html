@@ -1,0 +1,73 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Calculatrice Cloud Native - ENT</title>
+    <style>
+        body { font-family: sans-serif; background: #f5f5f5; margin: 0; padding: 20px; }
+        .container { max-width: 600px; margin: auto; background: white; padding: 20px; border-radius: 8px; box-shadow: 0 2px 10px rgba(0,0,0,0.1); }
+        h1 { color: #a91d3a; text-align: center; }
+        .calc-form { display: flex; flex-direction: column; gap: 10px; }
+        input, select, button { padding: 10px; font-size: 1rem; border-radius: 4px; border: 1px solid #ccc; }
+        button { background: #a91d3a; color: white; border: none; cursor: pointer; }
+        button:hover { background: #c41e4a; }
+        #result-area { margin-top: 20px; padding: 15px; background: #eef; border-radius: 4px; min-height: 50px; }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>Calculatrice Cloud Native</h1>
+        <div class="calc-form">
+            <input type="number" id="numA" placeholder="Nombre A">
+            <select id="op">
+                <option value="addition">+</option>
+                <option value="soustraction">-</option>
+                <option value="multiplication">×</option>
+                <option value="division">÷</option>
+            </select>
+            <input type="number" id="numB" placeholder="Nombre B">
+            <button onclick="sendCalculation()">Calculer</button>
+        </div>
+        
+        <div id="result-area">
+            Entrez un calcul pour commencer.
+        </div>
+    </div>
+
+    <script>
+        async function sendCalculation() {
+            const a = document.getElementById('numA').value;
+            const b = document.getElementById('numB').value;
+            const opPath = document.getElementById('op').value;
+            const resArea = document.getElementById('result-area');
+
+            resArea.innerText = "Envoi du calcul...";
+
+            try {
+                const response = await fetch('/api/' + opPath, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ a: parseFloat(a), b: parseFloat(b) })
+                });
+                const data = await response.json();
+                const id = data.id;
+                
+                resArea.innerText = "Calcul en cours (ID: " + id + ")...";
+                
+                // Poll for result
+                const poll = setInterval(async () => {
+                    const res = await fetch('/api/result/' + id);
+                    const resData = await res.json();
+                    if (resData.result !== undefined) {
+                        resArea.innerText = "Résultat : " + resData.result;
+                        clearInterval(poll);
+                    }
+                }, 1000);
+            } catch (e) {
+                resArea.innerText = "Erreur : " + e.message;
+            }
+        }
+    </script>
+</body>
+</html>
