@@ -1,0 +1,228 @@
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: chegueni-ouadid-benabdelaziz
+
+---
+# Redis Deployment
+apiVersion: apps/v1
+kind: ReplicaSet
+metadata:
+  name: redis
+  namespace: chegueni-ouadid-benabdelaziz
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: redis
+  template:
+    metadata:
+      labels:
+        app: redis
+    spec:
+      containers:
+      - name: redis
+        image: redis:alpine
+        ports:
+        - containerPort: 6379
+        resources:
+          requests:
+            cpu: "4m"
+            memory: "32Mi"
+
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: svc-redis
+  namespace: chegueni-ouadid-benabdelaziz
+spec:
+  selector:
+    app: redis
+  ports:
+  - port: 6379
+    targetPort: 6379
+
+---
+# RabbitMQ Deployment
+apiVersion: apps/v1
+kind: ReplicaSet
+metadata:
+  name: rabbitmq
+  namespace: chegueni-ouadid-benabdelaziz
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: rabbitmq
+  template:
+    metadata:
+      labels:
+        app: rabbitmq
+    spec:
+      containers:
+      - name: rabbitmq
+        image: rabbitmq:3.12-management
+        ports:
+        - containerPort: 5672
+        - containerPort: 15672
+        resources:
+          requests:
+            cpu: "4m"
+            memory: "32Mi"
+
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: svc-rabbitmq
+  namespace: chegueni-ouadid-benabdelaziz
+spec:
+  selector:
+    app: rabbitmq
+  ports:
+  - name: amqp
+    port: 5672
+    targetPort: 5672
+  - name: management
+    port: 15672
+    targetPort: 15672
+
+---
+# Backend API Deployment
+apiVersion: apps/v1
+kind: ReplicaSet
+metadata:
+  name: backend
+  namespace: chegueni-ouadid-benabdelaziz
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: backend
+  template:
+    metadata:
+      labels:
+        app: backend
+    spec:
+      containers:
+      - name: backend
+        image: registry-binome1-binome2/backend:latest
+        env:
+        - name: REDIS_HOST
+          value: "svc-redis"
+        - name: RABBITMQ_HOST
+          value: "svc-rabbitmq"
+        resources:
+          requests:
+            cpu: "4m"
+            memory: "32Mi"
+
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: svc-api
+  namespace: chegueni-ouadid-benabdelaziz
+spec:
+  selector:
+    app: backend
+  ports:
+  - port: 5000
+    targetPort: 5000
+
+---
+# Consumer Deployment
+apiVersion: apps/v1
+kind: ReplicaSet
+metadata:
+  name: consumer
+  namespace: chegueni-ouadid-benabdelaziz
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: consumer
+  template:
+    metadata:
+      labels:
+        app: consumer
+    spec:
+      containers:
+      - name: consumer
+        image: registry-binome1-binome2/consumer:latest
+        env:
+        - name: REDIS_HOST
+          value: "svc-redis"
+        - name: RABBITMQ_HOST
+          value: "svc-rabbitmq"
+        resources:
+          requests:
+            cpu: "4m"
+            memory: "32Mi"
+
+---
+# Frontend Deployment
+apiVersion: apps/v1
+kind: ReplicaSet
+metadata:
+  name: frontend
+  namespace: chegueni-ouadid-benabdelaziz
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: frontend
+  template:
+    metadata:
+      labels:
+        app: frontend
+    spec:
+      containers:
+      - name: frontend
+        image: registry-binome1-binome2/frontend:latest
+        resources:
+          requests:
+            cpu: "4m"
+            memory: "32Mi"
+
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: svc-front
+  namespace: chegueni-ouadid-benabdelaziz
+spec:
+  selector:
+    app: frontend
+  ports:
+  - port: 80
+    targetPort: 80
+
+---
+# Ingress Rules
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: calculator-ingress
+  namespace: chegueni-ouadid-benabdelaziz
+spec:
+  ingressClassName: nginx
+  rules:
+  - host: calculatrice-binome1-binome2.polytech-dijon.kiowy.net
+    http:
+      paths:
+      - path: /api
+        pathType: Prefix
+        backend:
+          service:
+            name: svc-api
+            port:
+              number: 5000
+      - path: /
+        pathType: Prefix
+        backend:
+          service:
+            name: svc-front
+            port:
+              number: 80
