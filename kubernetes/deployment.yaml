@@ -4,11 +4,11 @@ metadata:
   name: chegueni-ouadid-benabdelaziz
 
 ---
-# Redis Deployment
+# 1. Redis (ReplicaSet + Service)
 apiVersion: apps/v1
 kind: ReplicaSet
 metadata:
-  name: redis
+  name: redis-rs
   namespace: chegueni-ouadid-benabdelaziz
 spec:
   replicas: 1
@@ -23,13 +23,10 @@ spec:
       containers:
       - name: redis
         image: redis:alpine
-        ports:
-        - containerPort: 6379
         resources:
           requests:
             cpu: "4m"
             memory: "32Mi"
-
 ---
 apiVersion: v1
 kind: Service
@@ -41,14 +38,13 @@ spec:
     app: redis
   ports:
   - port: 6379
-    targetPort: 6379
 
 ---
-# RabbitMQ Deployment
+# 2. RabbitMQ (ReplicaSet + Service)
 apiVersion: apps/v1
 kind: ReplicaSet
 metadata:
-  name: rabbitmq
+  name: rabbitmq-rs
   namespace: chegueni-ouadid-benabdelaziz
 spec:
   replicas: 1
@@ -63,14 +59,10 @@ spec:
       containers:
       - name: rabbitmq
         image: rabbitmq:3.12-management
-        ports:
-        - containerPort: 5672
-        - containerPort: 15672
         resources:
           requests:
-            cpu: "4m"
-            memory: "32Mi"
-
+            cpu: "100m"  
+            memory: "256Mi"
 ---
 apiVersion: v1
 kind: Service
@@ -83,17 +75,15 @@ spec:
   ports:
   - name: amqp
     port: 5672
-    targetPort: 5672
   - name: management
     port: 15672
-    targetPort: 15672
 
 ---
-# Backend API Deployment
+# 3. Backend / API (ReplicaSet + Service)
 apiVersion: apps/v1
 kind: ReplicaSet
 metadata:
-  name: backend
+  name: api-rs
   namespace: chegueni-ouadid-benabdelaziz
 spec:
   replicas: 1
@@ -105,9 +95,11 @@ spec:
       labels:
         app: backend
     spec:
+      imagePullSecrets:
+      - name: ecr-registry
       containers:
       - name: backend
-        image: registry-binome1-binome2/backend:latest
+        image: 294337989672.dkr.ecr.eu-west-3.amazonaws.com/backend:latest
         env:
         - name: REDIS_HOST
           value: "svc-redis"
@@ -117,7 +109,6 @@ spec:
           requests:
             cpu: "4m"
             memory: "32Mi"
-
 ---
 apiVersion: v1
 kind: Service
@@ -129,14 +120,13 @@ spec:
     app: backend
   ports:
   - port: 5000
-    targetPort: 5000
 
 ---
-# Consumer Deployment
+# 4. Consumer (ReplicaSet)
 apiVersion: apps/v1
 kind: ReplicaSet
 metadata:
-  name: consumer
+  name: consumer-rs
   namespace: chegueni-ouadid-benabdelaziz
 spec:
   replicas: 1
@@ -148,9 +138,11 @@ spec:
       labels:
         app: consumer
     spec:
+      imagePullSecrets:
+      - name: ecr-registry
       containers:
       - name: consumer
-        image: registry-binome1-binome2/consumer:latest
+        image: 294337989672.dkr.ecr.eu-west-3.amazonaws.com/consumer:latest
         env:
         - name: REDIS_HOST
           value: "svc-redis"
@@ -162,11 +154,11 @@ spec:
             memory: "32Mi"
 
 ---
-# Frontend Deployment
+# 5. Frontend (ReplicaSet + Service)
 apiVersion: apps/v1
 kind: ReplicaSet
 metadata:
-  name: frontend
+  name: front-rs
   namespace: chegueni-ouadid-benabdelaziz
 spec:
   replicas: 1
@@ -178,14 +170,15 @@ spec:
       labels:
         app: frontend
     spec:
+      imagePullSecrets:
+      - name: ecr-registry
       containers:
       - name: frontend
-        image: registry-binome1-binome2/frontend:latest
+        image: 294337989672.dkr.ecr.eu-west-3.amazonaws.com/frontend:latest
         resources:
           requests:
             cpu: "4m"
             memory: "32Mi"
-
 ---
 apiVersion: v1
 kind: Service
@@ -197,28 +190,20 @@ spec:
     app: frontend
   ports:
   - port: 80
-    targetPort: 80
 
 ---
-# Ingress Rules
+# 6. Ingress (الباب الرئيسي للمشروع)
 apiVersion: networking.k8s.io/v1
 kind: Ingress
 metadata:
   name: calculator-ingress
   namespace: chegueni-ouadid-benabdelaziz
 spec:
-  ingressClassName: nginx
+  ingressClassName: nginx  # 
   rules:
-  - host: calculatrice-binome1-binome2.polytech-dijon.kiowy.net
+  - host: calculatrice-chegueni-ouadid-benabdelaziz.polytech-dijon.kiowy.net
     http:
       paths:
-      - path: /api
-        pathType: Prefix
-        backend:
-          service:
-            name: svc-api
-            port:
-              number: 5000
       - path: /
         pathType: Prefix
         backend:
@@ -226,3 +211,10 @@ spec:
             name: svc-front
             port:
               number: 80
+      - path: /api
+        pathType: Prefix
+        backend:
+          service:
+            name: svc-api
+            port:
+              number: 5000
